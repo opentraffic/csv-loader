@@ -12,8 +12,10 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -34,7 +36,7 @@ public class CsvLoader {
 					"specify CSV file (can be compressed as .csv.gz or csv.zip)");
 
 			options.addOption("u", true,
-					"specify URL for traffic engine file (defauls to 'http://localhost/')");
+					"specify URL for traffic engine file (defaults to 'http://localhost:9000/')");
 
 			CommandLineParser parser = new DefaultParser();
 			CommandLine cmd = parser.parse(options, args);
@@ -98,14 +100,18 @@ public class CsvLoader {
 
 			parser = new CSVParser(decoder, CSVFormat.RFC4180);
 
-			CloseableHttpClient client = HttpClients.createDefault();
+			CloseableHttpClient client = HttpClients.custom()
+					.setConnectionManager(new PoolingHttpClientConnectionManager())
+					.build();
 
-			for (CSVRecord csvRecord : parser.getRecords()) {
+			int count = 0;
 
+			// this is streaming; a call to getRecords() would read the file into memory
+			for (CSVRecord csvRecord : parser) {
 				String timeStr = csvRecord.get(0);
 				String vehicleIdStr = csvRecord.get(1);
-				String lonStr = csvRecord.get(2);
-				String latStr = csvRecord.get(3);
+				String lonStr = csvRecord.get(3);
+				String latStr = csvRecord.get(2);
 				
 				double lat;
 				double lon;
@@ -122,7 +128,7 @@ public class CsvLoader {
 				}
 				
 				long vehicleId;
-				vehicleId = Long.parseLong(vehicleIdStr);
+				vehicleId = new BigInteger(vehicleIdStr).longValue();
 				
 				ExchangeFormat.VehicleMessage vehicleMessage = ExchangeFormat.VehicleMessage.newBuilder()
 				 .setSourceId(sourceId)
@@ -132,13 +138,16 @@ public class CsvLoader {
 						 .setLon(lon)
 						 .setTimestamp(time))
 				 .build();
-				
+
 				byte[] postData = vehicleMessage.toByteArray();
 				HttpPost httpPost = new HttpPost(url);
 				ByteArrayEntity entity = new ByteArrayEntity(postData);
 				httpPost.setEntity(entity);
-				client.execute(httpPost);
+				client.execute(httpPost).close();
 				httpPost.releaseConnection();
+
+				if (++count % 1000 == 0)
+					System.out.println(String.format("%.2fk records loaded", count / 1000d));
 			}
 			
 			parser.close();
@@ -155,6 +164,7 @@ public class CsvLoader {
 
 			
 		} catch (IOException e) {
+			e.printStackTrace();
 			System.out.println("Unable to parse CSV " + csvFile);
 			if(parser != null)
 				try {
@@ -162,13 +172,20 @@ public class CsvLoader {
 				} catch (IOException e1) {
 					e1.printStackTrace();
 				}
-		} 
+		}
 	}
 
 	private static long parseTimeStrToMicros(String timeStr) throws ParseException {
 		StringBuilder sb = new StringBuilder(timeStr);
 		int snipStart = sb.indexOf(".");
 		int snipEnd = sb.indexOf("+");
+
+		if (snipEnd == -1)
+			snipEnd = sb.indexOf("Z");
+
+		if (snipEnd == -1)
+			snipEnd = sb.length();
+
 		String microsString="0.0";
 		if (snipStart != -1) {
 			microsString = "0"+sb.substring(snipStart,snipEnd);
