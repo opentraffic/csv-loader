@@ -8,6 +8,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -19,9 +20,7 @@ import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.UUID;
+import java.util.*;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -106,6 +105,9 @@ public class CsvLoader {
 
 			int count = 0;
 
+			Set<String> uniqueVehicles = new HashSet<>();
+			Set<Long> uniqueVehIds = new HashSet<>();
+
 			// this is streaming; a call to getRecords() would read the file into memory
 			for (CSVRecord csvRecord : parser) {
 				String timeStr = csvRecord.get(0);
@@ -129,6 +131,8 @@ public class CsvLoader {
 				
 				long vehicleId;
 				vehicleId = new BigInteger(vehicleIdStr).longValue();
+				uniqueVehicles.add(vehicleIdStr);
+				uniqueVehIds.add(vehicleId);
 				
 				ExchangeFormat.VehicleMessage vehicleMessage = ExchangeFormat.VehicleMessage.newBuilder()
 				 .setSourceId(sourceId)
@@ -143,11 +147,17 @@ public class CsvLoader {
 				HttpPost httpPost = new HttpPost(url);
 				ByteArrayEntity entity = new ByteArrayEntity(postData);
 				httpPost.setEntity(entity);
-				client.execute(httpPost).close();
+				CloseableHttpResponse res = client.execute(httpPost);
+
+				if (res.getStatusLine().getStatusCode() != 200)
+					System.out.println("not ok: " + res.getStatusLine().getStatusCode() + " " + res.getStatusLine().getReasonPhrase());
+
+				res.close();
+
 				httpPost.releaseConnection();
 
-				if (++count % 1000 == 0)
-					System.out.println(String.format("%.2fk records loaded", count / 1000d));
+				if (++count % 10000 == 0)
+					System.out.println(String.format("%.2fM records loaded, %d unique vehicles (%d unique ids)", count / 1e6, uniqueVehicles.size(), uniqueVehIds.size()));
 			}
 			
 			parser.close();
