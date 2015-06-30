@@ -71,8 +71,6 @@ public class CsvLoader {
 
 		// create a semi-random source id for this csv load attempt
 		// prevents vehicle id collisions
-		
-		
 		CSVParser parser = null;
 		try {
 			
@@ -99,21 +97,20 @@ public class CsvLoader {
 
 			parser = new CSVParser(decoder, CSVFormat.RFC4180);
 
-			CloseableHttpClient client = HttpClients.custom()
-					.setConnectionManager(new PoolingHttpClientConnectionManager())
-					.build();
 
 			int count = 0;
 
 			Set<String> uniqueVehicles = new HashSet<>();
 			Set<Long> uniqueVehIds = new HashSet<>();
 
+			List<ExchangeFormat.VehicleMessage> messages = new ArrayList<ExchangeFormat.VehicleMessage>();
+
 			// this is streaming; a call to getRecords() would read the file into memory
 			for (CSVRecord csvRecord : parser) {
 				String timeStr = csvRecord.get(0);
 				String vehicleIdStr = csvRecord.get(1);
-				String lonStr = csvRecord.get(3);
-				String latStr = csvRecord.get(2);
+				String lonStr = csvRecord.get(2);
+				String latStr = csvRecord.get(3);
 				
 				double lat;
 				double lon;
@@ -123,7 +120,7 @@ public class CsvLoader {
 				
 				long time;
 				try {
-					time = parseTimeStrToMicros( timeStr );
+					time = parseTimeStrToMilli( timeStr );
 				} catch (ParseException ex) {
 					System.out.println("Unable to parse taxi time " + timeStr);
 					continue;
@@ -133,32 +130,26 @@ public class CsvLoader {
 				vehicleId = new BigInteger(vehicleIdStr).longValue();
 				uniqueVehicles.add(vehicleIdStr);
 				uniqueVehIds.add(vehicleId);
-				
+
 				ExchangeFormat.VehicleMessage vehicleMessage = ExchangeFormat.VehicleMessage.newBuilder()
-				 .setSourceId(sourceId)
-				 .setVehicleId(vehicleId)
-				 .addLocations(ExchangeFormat.VehicleLocation.newBuilder()
-						 .setLat(lat)
-						 .setLon(lon)
-						 .setTimestamp(time))
-				 .build();
+						.setVehicleId(vehicleId)
+						.addLocations(ExchangeFormat.VehicleLocation.newBuilder()
+								.setLat(lat)
+								.setLon(lon)
+								.setTimestamp(time))
+						.build();
 
-				byte[] postData = vehicleMessage.toByteArray();
-				HttpPost httpPost = new HttpPost(url);
-				ByteArrayEntity entity = new ByteArrayEntity(postData);
-				httpPost.setEntity(entity);
-				CloseableHttpResponse res = client.execute(httpPost);
+				messages.add(vehicleMessage);
 
-				if (res.getStatusLine().getStatusCode() != 200)
-					System.out.println("not ok: " + res.getStatusLine().getStatusCode() + " " + res.getStatusLine().getReasonPhrase());
+				if(messages.size() > 10000) {
+					sendData(url, sourceId, messages);
+					messages.clear();
 
-				res.close();
-
-				httpPost.releaseConnection();
-
-				if (++count % 10000 == 0)
 					System.out.println(String.format("%.2fM records loaded, %d unique vehicles (%d unique ids)", count / 1e6, uniqueVehicles.size(), uniqueVehIds.size()));
+				}
 			}
+
+			sendData(url, sourceId, messages);
 			
 			parser.close();
 			decoder.close();
@@ -185,7 +176,37 @@ public class CsvLoader {
 		}
 	}
 
-	private static long parseTimeStrToMicros(String timeStr) throws ParseException {
+	private static void sendData(String url, long sourceId, List<ExchangeFormat.VehicleMessage> messages) {
+
+		try {
+			CloseableHttpClient client = HttpClients.custom()
+					.setConnectionManager(new PoolingHttpClientConnectionManager())
+					.build();
+
+			ExchangeFormat.VehicleMessageEnvelope vehicleMessageEnvelope = ExchangeFormat.VehicleMessageEnvelope.newBuilder()
+					.setSourceId(sourceId)
+					.addAllMessages(messages)
+					.build();
+
+			byte[] postData = vehicleMessageEnvelope.toByteArray();
+			HttpPost httpPost = new HttpPost(url);
+			ByteArrayEntity entity = new ByteArrayEntity(postData);
+			httpPost.setEntity(entity);
+			CloseableHttpResponse res = client.execute(httpPost);
+
+			if (res.getStatusLine().getStatusCode() != 200)
+				System.out.println("not ok: " + res.getStatusLine().getStatusCode() + " " + res.getStatusLine().getReasonPhrase());
+
+			res.close();
+
+			httpPost.releaseConnection();
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private static long parseTimeStrToMilli(String timeStr) throws ParseException {
 		StringBuilder sb = new StringBuilder(timeStr);
 		int snipStart = sb.indexOf(".");
 		int snipEnd = sb.indexOf("+");
@@ -207,9 +228,9 @@ public class CsvLoader {
 		
 		Date dt = formatter.parse(timeStr);
 		long timeMillis = dt.getTime();
-		long micros = (long) (Double.parseDouble(microsString)*1000000);
+		long millis = (long) (Double.parseDouble(microsString)*1000);
 		
-		long time = timeMillis*1000 + micros;
+		long time = timeMillis + millis;
 		return time;
 	}
 }
