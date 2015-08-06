@@ -1,6 +1,6 @@
 package com.conveyal.traffic.loader;
 
-import com.conveyal.traffic.data.ExchangeFormat;
+import com.conveyal.traffic.data.pbf.ExchangeFormat;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -176,33 +176,44 @@ public class CsvLoader {
 		}
 	}
 
-	private static void sendData(String url, long sourceId, List<ExchangeFormat.VehicleMessage> messages) {
+	public static void sendData(String url, long sourceId, List<ExchangeFormat.VehicleMessage> messages) {
 
-		try {
-			CloseableHttpClient client = HttpClients.custom()
-					.setConnectionManager(new PoolingHttpClientConnectionManager())
-					.build();
+		boolean dataSent = false;
 
-			ExchangeFormat.VehicleMessageEnvelope vehicleMessageEnvelope = ExchangeFormat.VehicleMessageEnvelope.newBuilder()
-					.setSourceId(sourceId)
-					.addAllMessages(messages)
-					.build();
+		while(!dataSent) {
+			try {
+				CloseableHttpClient client = HttpClients.custom()
+						.setConnectionManager(new PoolingHttpClientConnectionManager())
+						.build();
 
-			byte[] postData = vehicleMessageEnvelope.toByteArray();
-			HttpPost httpPost = new HttpPost(url);
-			ByteArrayEntity entity = new ByteArrayEntity(postData);
-			httpPost.setEntity(entity);
-			CloseableHttpResponse res = client.execute(httpPost);
+				ExchangeFormat.VehicleMessageEnvelope vehicleMessageEnvelope = ExchangeFormat.VehicleMessageEnvelope.newBuilder()
+						.setSourceId(sourceId)
+						.addAllMessages(messages)
+						.build();
 
-			if (res.getStatusLine().getStatusCode() != 200)
-				System.out.println("not ok: " + res.getStatusLine().getStatusCode() + " " + res.getStatusLine().getReasonPhrase());
+				byte[] postData = vehicleMessageEnvelope.toByteArray();
+				HttpPost httpPost = new HttpPost(url);
+				ByteArrayEntity entity = new ByteArrayEntity(postData);
+				httpPost.setEntity(entity);
+				CloseableHttpResponse res = client.execute(httpPost);
 
-			res.close();
+				if (res.getStatusLine().getStatusCode() != 200)
+					System.out.println("not ok: " + res.getStatusLine().getStatusCode() + " " + res.getStatusLine().getReasonPhrase());
 
-			httpPost.releaseConnection();
+				res.close();
 
-		} catch (IOException e) {
-			e.printStackTrace();
+				httpPost.releaseConnection();
+
+				dataSent = true;
+
+			} catch (IOException e) {
+				System.out.println("Unable to send data to " + url + " retrying in 5s.");
+				try {
+					Thread.sleep(5000);
+				} catch (InterruptedException e1) {
+
+				}
+			}
 		}
 	}
 
