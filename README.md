@@ -7,7 +7,7 @@ Requires Java 1.8+
 
 1. Download latest release build from the releases page or build from source
 2. Install and launch traffic-engine-app (https://github.com/opentraffic/traffic-engine-app)
-3. Format vehicle location data as CSV with the format "unique_vehicle_id,utc_timestamp,lat,lon"
+3. Format vehicle location data as CSV with the format `utc_timestamp,unique_vehicle_id,lat,lon`
 4. Run app 
 ```
 java -jar target/csv-loader.jar -f [path to CSV file] -u http://localhost:4567/locationUpdate
