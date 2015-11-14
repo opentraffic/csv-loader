@@ -1,6 +1,6 @@
 package com.conveyal.traffic.loader;
 
-import com.conveyal.traffic.data.pbf.ExchangeFormat;
+import io.opentraffic.engine.data.pbf.ExchangeFormat;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -142,6 +142,7 @@ public class CsvLoader {
 				messages.add(vehicleMessage);
 
 				if(messages.size() > 10000) {
+					count += messages.size();
 					sendData(url, sourceId, messages);
 					messages.clear();
 
