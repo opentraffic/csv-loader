@@ -142,6 +142,7 @@ public class CsvLoader {
 				messages.add(vehicleMessage);
 
 				if(messages.size() > 10000) {
+					count += messages.size();
 					sendData(url, sourceId, messages);
 					messages.clear();
 
