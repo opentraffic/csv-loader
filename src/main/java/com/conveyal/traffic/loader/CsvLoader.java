@@ -1,6 +1,6 @@
 package com.conveyal.traffic.loader;
 
-import com.conveyal.traffic.data.pbf.ExchangeFormat;
+import io.opentraffic.engine.data.pbf.ExchangeFormat;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -26,222 +26,227 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public class CsvLoader {
-	
-	public static void main(String[] args) {
-		try {
-			Options options = new Options();
 
-			options.addOption("f", true,
-					"specify CSV file (can be compressed as .csv.gz or csv.zip)");
+    public static void main(String[] args) {
+        try {
+            Options options = new Options();
 
-			options.addOption("u", true,
-					"specify URL for traffic engine file (defaults to 'http://localhost:9000/')");
+            options.addOption("f", true,
+                    "specify CSV file (can be compressed as .csv.gz or csv.zip)");
 
-			CommandLineParser parser = new DefaultParser();
-			CommandLine cmd = parser.parse(options, args);
+            options.addOption("u", true,
+                    "specify URL for traffic engine file (defaults to 'http://localhost:9000/')");
 
-			String urlStr = "http://localhost:9000/";
+            CommandLineParser parser = new DefaultParser();
+            CommandLine cmd = parser.parse(options, args);
 
-			if (cmd.hasOption("u"))
-				urlStr = cmd.getOptionValue("u");
+            String urlStr = "http://localhost:9000/";
 
-			if (!cmd.hasOption("f")) {
-				System.out.println("CSV input file not specified");
-				return;
-			}
+            if (cmd.hasOption("u"))
+                urlStr = cmd.getOptionValue("u");
 
-			System.out.println(cmd.getOptionValue("f"));
+            if (!cmd.hasOption("f")) {
+                System.out.println("CSV input file not specified");
+                return;
+            }
 
-			File csvFile = new File(cmd.getOptionValue("f"));
+            System.out.println(cmd.getOptionValue("f"));
 
-			if (!csvFile.exists()) {
-				System.out.println("CSV input file does not exist: " + csvFile.getAbsolutePath());
-				return;
-			} else {
-				long sourceId = UUID.randomUUID().getLeastSignificantBits();
-				processCsv(sourceId, csvFile, urlStr);
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-			
-	}
+            File csvFile = new File(cmd.getOptionValue("f"));
 
-	public static void processCsv(long sourceId, File csvFile, String url) {
+            if (!csvFile.exists()) {
+                System.out.println("CSV input file does not exist: " + csvFile.getAbsolutePath());
+                return;
+            } else {
+                long sourceId = UUID.randomUUID().getLeastSignificantBits();
+                processCsv(sourceId, csvFile, urlStr);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-		// create a semi-random source id for this csv load attempt
-		// prevents vehicle id collisions
-		CSVParser parser = null;
-		try {
-			
-			InputStream fileStream = null;
-			ZipFile zf = null;
-			InputStream gzipStream = null;
-			Reader decoder = null;
-			
-			if(csvFile.getName().toLowerCase().endsWith(".zip")) {
-				zf = new ZipFile(csvFile);
-				Enumeration e = zf.entries();
-				ZipEntry entry = (ZipEntry) e.nextElement();
-				decoder = new InputStreamReader(zf.getInputStream(entry), Charset.forName("UTF-8"));
-			}
-			else if(csvFile.getName().toLowerCase().endsWith(".gz")) {
-				fileStream = new FileInputStream(csvFile);
-				gzipStream = new GZIPInputStream(fileStream);
-				decoder = new InputStreamReader(gzipStream, Charset.forName("UTF-8"));
-			} 
-			else {
-				fileStream = new FileInputStream(csvFile);
-				decoder = new InputStreamReader(fileStream, Charset.forName("UTF-8"));
-			}
+    }
 
-			parser = new CSVParser(decoder, CSVFormat.RFC4180);
+    public static void processCsv(long sourceId, File csvFile, String url) {
+
+        // create a semi-random source id for this csv load attempt
+        // prevents vehicle id collisions
+        CSVParser parser = null;
+        try {
+
+            InputStream fileStream = null;
+            ZipFile zf = null;
+            InputStream gzipStream = null;
+            Reader decoder = null;
+
+            if(csvFile.getName().toLowerCase().endsWith(".zip")) {
+                zf = new ZipFile(csvFile);
+                Enumeration e = zf.entries();
+                ZipEntry entry = (ZipEntry) e.nextElement();
+                decoder = new InputStreamReader(zf.getInputStream(entry), Charset.forName("UTF-8"));
+            }
+            else if(csvFile.getName().toLowerCase().endsWith(".gz")) {
+                fileStream = new FileInputStream(csvFile);
+                gzipStream = new GZIPInputStream(fileStream);
+                decoder = new InputStreamReader(gzipStream, Charset.forName("UTF-8"));
+            }
+            else {
+                fileStream = new FileInputStream(csvFile);
+                decoder = new InputStreamReader(fileStream, Charset.forName("UTF-8"));
+            }
+
+            parser = new CSVParser(decoder, CSVFormat.RFC4180);
 
 
-			int count = 0;
+            int count = 0;
 
-			Set<String> uniqueVehicles = new HashSet<>();
-			Set<Long> uniqueVehIds = new HashSet<>();
+            Set<String> uniqueVehicles = new HashSet<>();
+            Set<Long> uniqueVehIds = new HashSet<>();
 
-			List<ExchangeFormat.VehicleMessage> messages = new ArrayList<ExchangeFormat.VehicleMessage>();
+            List<ExchangeFormat.VehicleMessage> messages = new ArrayList<ExchangeFormat.VehicleMessage>();
 
-			// this is streaming; a call to getRecords() would read the file into memory
-			for (CSVRecord csvRecord : parser) {
-				String timeStr = csvRecord.get(0);
-				String vehicleIdStr = csvRecord.get(1);
-				String lonStr = csvRecord.get(2);
-				String latStr = csvRecord.get(3);
-				
-				double lat;
-				double lon;
-				
-				lat = Double.parseDouble(latStr);
-				lon = Double.parseDouble(lonStr);
-				
-				long time;
-				try {
-					time = parseTimeStrToMilli( timeStr );
-				} catch (ParseException ex) {
-					System.out.println("Unable to parse taxi time " + timeStr);
-					continue;
-				}
-				
-				long vehicleId;
-				vehicleId = new BigInteger(vehicleIdStr).longValue();
-				uniqueVehicles.add(vehicleIdStr);
-				uniqueVehIds.add(vehicleId);
+            // this is streaming; a call to getRecords() would read the file into memory
+            for (CSVRecord csvRecord : parser) {
+                String timeStr = csvRecord.get(0);
+                String vehicleIdStr = csvRecord.get(1);
+                String lonStr = csvRecord.get(2);
+                String latStr = csvRecord.get(3);
+                if(csvRecord.size() > 9){
+                    lonStr = csvRecord.get(10);
+                    latStr = csvRecord.get(9);
+                }
 
-				ExchangeFormat.VehicleMessage vehicleMessage = ExchangeFormat.VehicleMessage.newBuilder()
-						.setVehicleId(vehicleId)
-						.addLocations(ExchangeFormat.VehicleLocation.newBuilder()
-								.setLat(lat)
-								.setLon(lon)
-								.setTimestamp(time))
-						.build();
 
-				messages.add(vehicleMessage);
+                double lat;
+                double lon;
 
-				if(messages.size() > 10000) {
-					sendData(url, sourceId, messages);
-					messages.clear();
+                lat = Double.parseDouble(latStr);
+                lon = Double.parseDouble(lonStr);
 
-					System.out.println(String.format("%.2fM records loaded, %d unique vehicles (%d unique ids)", count / 1e6, uniqueVehicles.size(), uniqueVehIds.size()));
-				}
-			}
+                long time;
+                try {
+                    time = parseTimeStrToMilli( timeStr );
+                } catch (ParseException ex) {
+                    System.out.println("Unable to parse taxi time " + timeStr);
+                    continue;
+                }
 
-			sendData(url, sourceId, messages);
-			
-			parser.close();
-			decoder.close();
-			
-			if(fileStream != null)
-				fileStream.close();
-			
-			if(zf != null)
-				zf.close();
-			
-			if(gzipStream != null)
-				gzipStream.close();
+                long vehicleId;
+                vehicleId = new BigInteger(vehicleIdStr).longValue();
+                uniqueVehicles.add(vehicleIdStr);
+                uniqueVehIds.add(vehicleId);
 
-			
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.out.println("Unable to parse CSV " + csvFile);
-			if(parser != null)
-				try {
-					parser.close();
-				} catch (IOException e1) {
-					e1.printStackTrace();
-				}
-		}
-	}
+                ExchangeFormat.VehicleMessage vehicleMessage = ExchangeFormat.VehicleMessage.newBuilder()
+                        .setVehicleId(vehicleId)
+                        .addLocations(ExchangeFormat.VehicleLocation.newBuilder()
+                                .setLat(lat)
+                                .setLon(lon)
+                                .setTimestamp(time))
+                        .build();
 
-	public static void sendData(String url, long sourceId, List<ExchangeFormat.VehicleMessage> messages) {
+                messages.add(vehicleMessage);
 
-		boolean dataSent = false;
+                if(messages.size() > 10000) {
+                    sendData(url, sourceId, messages);
+                    messages.clear();
 
-		while(!dataSent) {
-			try {
-				CloseableHttpClient client = HttpClients.custom()
-						.setConnectionManager(new PoolingHttpClientConnectionManager())
-						.build();
+                    System.out.println(String.format("%.2fM records loaded, %d unique vehicles (%d unique ids)", count / 1e6, uniqueVehicles.size(), uniqueVehIds.size()));
+                }
+            }
 
-				ExchangeFormat.VehicleMessageEnvelope vehicleMessageEnvelope = ExchangeFormat.VehicleMessageEnvelope.newBuilder()
-						.setSourceId(sourceId)
-						.addAllMessages(messages)
-						.build();
+            sendData(url, sourceId, messages);
 
-				byte[] postData = vehicleMessageEnvelope.toByteArray();
-				HttpPost httpPost = new HttpPost(url);
-				ByteArrayEntity entity = new ByteArrayEntity(postData);
-				httpPost.setEntity(entity);
-				CloseableHttpResponse res = client.execute(httpPost);
+            parser.close();
+            decoder.close();
 
-				if (res.getStatusLine().getStatusCode() != 200)
-					System.out.println("not ok: " + res.getStatusLine().getStatusCode() + " " + res.getStatusLine().getReasonPhrase());
+            if(fileStream != null)
+                fileStream.close();
 
-				res.close();
+            if(zf != null)
+                zf.close();
 
-				httpPost.releaseConnection();
+            if(gzipStream != null)
+                gzipStream.close();
 
-				dataSent = true;
 
-			} catch (IOException e) {
-				System.out.println("Unable to send data to " + url + " retrying in 5s.");
-				try {
-					Thread.sleep(5000);
-				} catch (InterruptedException e1) {
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Unable to parse CSV " + csvFile);
+            if(parser != null)
+                try {
+                    parser.close();
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                }
+        }
+    }
 
-				}
-			}
-		}
-	}
+    public static void sendData(String url, long sourceId, List<ExchangeFormat.VehicleMessage> messages) {
 
-	private static long parseTimeStrToMilli(String timeStr) throws ParseException {
-		StringBuilder sb = new StringBuilder(timeStr);
-		int snipStart = sb.indexOf(".");
-		int snipEnd = sb.indexOf("+");
+        boolean dataSent = false;
 
-		if (snipEnd == -1)
-			snipEnd = sb.indexOf("Z");
+        while(!dataSent) {
+            try {
+                CloseableHttpClient client = HttpClients.custom()
+                        .setConnectionManager(new PoolingHttpClientConnectionManager())
+                        .build();
 
-		if (snipEnd == -1)
-			snipEnd = sb.length();
+                ExchangeFormat.VehicleMessageEnvelope vehicleMessageEnvelope = ExchangeFormat.VehicleMessageEnvelope.newBuilder()
+                        .setSourceId(sourceId)
+                        .addAllMessages(messages)
+                        .build();
 
-		String microsString="0.0";
-		if (snipStart != -1) {
-			microsString = "0"+sb.substring(snipStart,snipEnd);
-			sb.delete(snipStart,snipEnd);
-			timeStr = sb.toString();
-		}
-			
-		SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssX");
-		
-		Date dt = formatter.parse(timeStr);
-		long timeMillis = dt.getTime();
-		long millis = (long) (Double.parseDouble(microsString)*1000);
-		
-		long time = timeMillis + millis;
-		return time;
-	}
+                byte[] postData = vehicleMessageEnvelope.toByteArray();
+                HttpPost httpPost = new HttpPost(url);
+                ByteArrayEntity entity = new ByteArrayEntity(postData);
+                httpPost.setEntity(entity);
+                CloseableHttpResponse res = client.execute(httpPost);
+
+                if (res.getStatusLine().getStatusCode() != 200)
+                    System.out.println("not ok: " + res.getStatusLine().getStatusCode() + " " + res.getStatusLine().getReasonPhrase());
+
+                res.close();
+
+                httpPost.releaseConnection();
+
+                dataSent = true;
+
+            } catch (IOException e) {
+                System.out.println("Unable to send data to " + url + " retrying in 5s.");
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e1) {
+
+                }
+            }
+        }
+    }
+
+    private static long parseTimeStrToMilli(String timeStr) throws ParseException {
+        StringBuilder sb = new StringBuilder(timeStr);
+        int snipStart = sb.indexOf(".");
+        int snipEnd = sb.indexOf("+");
+
+        if (snipEnd == -1)
+            snipEnd = sb.indexOf("Z");
+
+        if (snipEnd == -1)
+            snipEnd = sb.length();
+
+        String microsString="0.0";
+        if (snipStart != -1) {
+            microsString = "0"+sb.substring(snipStart,snipEnd);
+            sb.delete(snipStart,snipEnd);
+            timeStr = sb.toString();
+        }
+
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssX");
+
+        Date dt = formatter.parse(timeStr);
+        long timeMillis = dt.getTime();
+        long millis = (long) (Double.parseDouble(microsString)*1000);
+
+        long time = timeMillis + millis;
+        return time;
+    }
 }
