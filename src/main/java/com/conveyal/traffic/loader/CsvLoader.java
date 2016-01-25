@@ -107,21 +107,30 @@ public class CsvLoader {
 
             // this is streaming; a call to getRecords() would read the file into memory
             for (CSVRecord csvRecord : parser) {
-                String timeStr = csvRecord.get(0);
-                String vehicleIdStr = csvRecord.get(1);
-                String lonStr = csvRecord.get(2);
-                String latStr = csvRecord.get(3);
-                if(csvRecord.size() > 9){
-                    lonStr = csvRecord.get(10);
-                    latStr = csvRecord.get(9);
-                }
-
+                String vehicleIdStr = null;
+                String timeStr;
+                String lonStr;
+                String latStr;
 
                 double lat;
                 double lon;
+                try{
+                    timeStr = csvRecord.get(0);
+                    vehicleIdStr = csvRecord.get(1);
+                    lonStr = csvRecord.get(2);
+                    latStr = csvRecord.get(3);
+                    if (csvRecord.size() > 9) {
+                        lonStr = csvRecord.get(10);
+                        latStr = csvRecord.get(9);
+                    }
 
-                lat = Double.parseDouble(latStr);
-                lon = Double.parseDouble(lonStr);
+                    lat = Double.parseDouble(latStr);
+                    lon = Double.parseDouble(lonStr);
+                }catch(Exception e){
+                    e.printStackTrace();
+                    System.out.println("failed to read record with values : " + csvRecord.toString());
+                    continue;
+                }
 
                 long time;
                 try {
@@ -147,6 +156,7 @@ public class CsvLoader {
                 messages.add(vehicleMessage);
 
                 if(messages.size() > 10000) {
+                    count += messages.size();
                     sendData(url, sourceId, messages);
                     messages.clear();
 
