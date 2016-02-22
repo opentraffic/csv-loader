@@ -249,10 +249,16 @@ public class CsvLoader {
             sb.delete(snipStart,snipEnd);
             timeStr = sb.toString();
         }
+        SimpleDateFormat formatter1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssX");
+        SimpleDateFormat formatter2 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssX");
+        Date dt = null;
+        try{
+            dt = formatter1.parse(timeStr);
+        }catch (Exception e){
+            dt = formatter2.parse(timeStr);
+        }
 
-        Date dt = formatter.parse(timeStr);
         long timeMillis = dt.getTime();
         long millis = (long) (Double.parseDouble(microsString)*1000);
 
