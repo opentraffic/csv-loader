@@ -1,5 +1,6 @@
 package com.conveyal.traffic.loader;
 
+import com.fasterxml.jackson.databind.util.ISO8601DateFormat;
 import io.opentraffic.engine.data.pbf.ExchangeFormat;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -28,6 +29,7 @@ import java.util.zip.ZipFile;
 public class CsvLoader {
 
     public static void main(String[] args) {
+
         try {
             Options options = new Options();
 
@@ -251,7 +253,7 @@ public class CsvLoader {
         }
         SimpleDateFormat formatter1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssX");
         SimpleDateFormat formatter2 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        SimpleDateFormat formatter3 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+        ISO8601DateFormat formatter3 = new ISO8601DateFormat();
         Date dt = null;
         try{
             dt = formatter1.parse(timeStr);
