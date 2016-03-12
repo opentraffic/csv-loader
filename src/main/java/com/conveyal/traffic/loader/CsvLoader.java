@@ -251,12 +251,16 @@ public class CsvLoader {
         }
         SimpleDateFormat formatter1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssX");
         SimpleDateFormat formatter2 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
+        SimpleDateFormat formatter3 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
         Date dt = null;
         try{
             dt = formatter1.parse(timeStr);
         }catch (Exception e){
-            dt = formatter2.parse(timeStr);
+            try{
+                dt = formatter2.parse(timeStr);
+            }catch (Exception e2){
+                dt = formatter3.parse(timeStr);
+            }
         }
 
         long timeMillis = dt.getTime();
