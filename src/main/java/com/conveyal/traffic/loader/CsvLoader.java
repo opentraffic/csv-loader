@@ -42,7 +42,7 @@ public class CsvLoader {
             CommandLineParser parser = new DefaultParser();
             CommandLine cmd = parser.parse(options, args);
 
-            String urlStr = "http://localhost:9000/";
+            String urlStr = "http://localhost:4567/locationUpdate";
 
             if (cmd.hasOption("u"))
                 urlStr = cmd.getOptionValue("u");
@@ -119,8 +119,8 @@ public class CsvLoader {
                 try{
                     timeStr = csvRecord.get(0);
                     vehicleIdStr = csvRecord.get(1);
-                    lonStr = csvRecord.get(2);
-                    latStr = csvRecord.get(3);
+                    lonStr = csvRecord.get(3);
+                    latStr = csvRecord.get(2);
                     if (csvRecord.size() > 9) {
                         lonStr = csvRecord.get(10);
                         latStr = csvRecord.get(9);
