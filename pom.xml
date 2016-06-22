@@ -73,9 +73,9 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-		<groupId>com.conveyal</groupId>
-		<artifactId>traffic-engine</artifactId>
-		<version>0.2-SNAPSHOT</version>
+  		<groupId>io.opentraffic</groupId>
+  		<artifactId>traffic-engine</artifactId>
+  		<version>0.2</version>
     </dependency>
     <dependency>
 		<groupId>org.mapdb</groupId>
